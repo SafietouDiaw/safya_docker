@@ -1,10 +1,10 @@
-name: Deploy Flask App to EC2
+name: Deploy Flask App with Docker to EC2
 
 on:
   push:
     branches:
       - main
-      
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -15,40 +15,45 @@ jobs:
 
       - name: Setup SSH
         env:
-          EC2_SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
-            echo "EC2_HOST='$EC2_HOST'"
             mkdir -p ~/.ssh
-            echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+            echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
             chmod 600 ~/.ssh/id_rsa
             ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
+
       - name: Ensure target directory exists on EC2
         env:
           EC2_USER: ${{ secrets.EC2_USER }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
-          ssh -i ~/.ssh/id_rsa $EC2_USER@$EC2_HOST \
-            "mkdir -p /home/ubuntu/${{ github.event.repository.name }}"
+          ssh -i ~/.ssh/id_rsa $EC2_USER@$EC2_HOST "mkdir -p /home/$EC2_USER/${{ github.event.repository.name }}"
 
       - name: Copy project to EC2
         env:
           EC2_USER: ${{ secrets.EC2_USER }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
-          scp -i ~/.ssh/id_rsa -r ./ \
-            $EC2_USER@$EC2_HOST:/home/ubuntu/${{ github.event.repository.name }}
+          # On ignore le dossier .git pour aller plus vite
+          scp -i ~/.ssh/id_rsa -r ./ $EC2_USER@$EC2_HOST:/home/$EC2_USER/${{ github.event.repository.name }}
 
-      - name: Install dependencies and run app on EC2
+      - name: Build and Run Docker Container on EC2
         env:
           EC2_USER: ${{ secrets.EC2_USER }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
+          REPO_NAME: ${{ github.event.repository.name }}
         run: |
           ssh -i ~/.ssh/id_rsa $EC2_USER@$EC2_HOST << EOF
-            cd /home/ubuntu/${{ github.event.repository.name }}
-            python3 -m venv venv
-            venv/bin/pip install --upgrade pip
-            venv/bin/pip install -r requirements.txt
-            pkill -f server.py || true
-            nohup venv/bin/python server.py > app.log 2>&1 &
+            cd /home/$EC2_USER/$REPO_NAME
+            
+            # 1. Construire l'image (le Dockerfile est utilisé ici sur AWS)
+            docker build -t flask-app-image .
+
+            # 2. Nettoyer l'ancien conteneur s'il tourne
+            docker stop flask-container || true
+            docker rm flask-container || true
+
+            # 3. Lancer le nouveau conteneur
+            docker run -d --name flask-container -p 5000:5000 flask-app-image
           EOF
