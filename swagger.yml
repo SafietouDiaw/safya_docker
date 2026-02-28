@@ -1,0 +1,76 @@
+openapi: 3.0.0
+
+info:
+  title: Person API
+  version: "1.0"
+
+paths:
+  /persons:
+    get:
+      operationId: persons.read_all
+      summary: Lister les personnes
+      responses:
+        '200':
+          description: Succès
+
+    post:
+      operationId: persons.create
+      summary: Ajouter une personne
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Person'
+      responses:
+        '201':
+          description: Créée
+
+  /persons/{id}:
+    put:
+      operationId: persons.update
+      summary: Modifier une personne
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Person'
+      responses:
+        '200':
+          description: Modifiée
+
+    delete:
+      operationId: persons.delete
+      summary: Supprimer une personne
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Supprimée
+
+components:
+  schemas:
+    Person:
+      type: object
+      required:
+        - nom
+        - prenom
+        - age
+      properties:
+        nom:
+          type: string
+        prenom:
+          type: string
+        age:
+          type: integer
